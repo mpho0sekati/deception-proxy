@@ -21,10 +21,10 @@ if 'threat_history' not in st.session_state:
     st.session_state.threat_history = []
 
 st.set_page_config(
-    page_title="Neutrophil SOC Dashboard",
-    page_icon="shield",
+    page_title="ImmuniSOC-Nexus Dashboard",
+    page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 def fetch_json(endpoint: str):
@@ -59,72 +59,62 @@ else:
     threat_level = "UNKNOWN"
 
 # Tier 1: Global Health (The Header) - Large status indicator
-st.markdown("<h1 style='text-align: center;'>NEUTROPHIL SECURITY OPERATIONS CENTER</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>ImmuniSOC-Nexus DASHBOARD</h1>", unsafe_allow_html=True)
 
 # System status indicator with color coding
 if threat_level == "CRITICAL":
-    status_text = "BREACH DETECTED"
-    status_color = "red"
-    status_style = f"<div style='background-color: {status_color}; padding: 20px; border-radius: 10px; text-align: center; font-size: 36px; font-weight: bold; color: white; animation: pulse 1s infinite;'>{status_text}</div>"
+    status_text = "CRITICAL THREAT DETECTED"
+    status_color = "#D32F2F"  # Dark red
+    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🔴 {status_text}</div>"
 elif threat_level == "MEDIUM":
-    status_text = "THREAT DETECTED"
-    status_color = "orange"
-    status_style = f"<div style='background-color: {status_color}; padding: 20px; border-radius: 10px; text-align: center; font-size: 36px; font-weight: bold; color: white;'>{status_text}</div>"
+    status_text = "MEDIUM THREAT DETECTED"
+    status_color = "#FF8F00"  # Amber
+    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🟡 {status_text}</div>"
+elif threat_level == "LOW":
+    status_text = "MINOR THREAT DETECTED"
+    status_color = "#FFB300"  # Light amber
+    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🟡 {status_text}</div>"
 elif threat_level == "SAFE":
     status_text = "SYSTEM SECURE"
-    status_color = "green"
-    status_style = f"<div style='background-color: {status_color}; padding: 20px; border-radius: 10px; text-align: center; font-size: 36px; font-weight: bold; color: white;'>{status_text}</div>"
+    status_color = "#388E3C"  # Dark green
+    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🟢 {status_text}</div>"
 else:
     status_text = "MONITORING"
-    status_color = "gray"
-    status_style = f"<div style='background-color: {status_color}; padding: 20px; border-radius: 10px; text-align: center; font-size: 36px; font-weight: bold; color: white;'>{status_text}</div>"
+    status_color = "#757575"  # Gray
+    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🔵 {status_text}</div>"
 
 st.markdown(status_style, unsafe_allow_html=True)
 
-# Add CSS for pulse animation
-st.markdown("""
-<style>
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Tier 2: Key Performance Indicators (The Top Row)
-st.markdown("### Key Security Metrics")
+# Key metrics in cards
 alerts = status_data.get("alerts", []) if status_data else []
 total_alerts = status_data.get("total_alerts", 0) if status_data else 0
 unique_ips = len({alert.get("ip") for alert in alerts}) if alerts else 0
 
-# Calculate uptime (assuming system started at the time of first alert or at a fixed time)
-uptime_hours = "N/A"
-if alerts:
-    try:
-        first_alert_time = datetime.fromisoformat(alerts[-1]["timestamp"].replace("Z", "+00:00"))
-        uptime_delta = datetime.now(first_alert_time.tzinfo) - first_alert_time
-        uptime_hours = f"{uptime_delta.days * 24 + uptime_delta.seconds // 3600} hours"
-    except:
-        uptime_hours = "Calculating..."
-
 col1, col2, col3 = st.columns(3)
+
 with col1:
-    st.metric(
-        label="Total Attacks Blocked", 
-        value=total_alerts,
-        delta_color="inverse"
-    )
+    st.markdown(f"""
+    <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h3 style="color: #1E88E5; margin-bottom: 10px;">🛡️ Attacks Blocked</h3>
+        <h2 style="color: #0D47A1; font-size: 36px; margin: 0;">{total_alerts}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
 with col2:
-    st.metric(
-        label="System Uptime", 
-        value=uptime_hours
-    )
+    st.markdown(f"""
+    <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h3 style="color: #1E88E5; margin-bottom: 10px;">🔒 IPs Quarantined</h3>
+        <h2 style="color: #0D47A1; font-size: 36px; margin: 0;">{unique_ips}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
 with col3:
-    st.metric(
-        label="Active Quarantined IPs", 
-        value=unique_ips
-    )
+    st.markdown(f"""
+    <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h3 style="color: #1E88E5; margin-bottom: 10px;">📊 Threat Level</h3>
+        <h2 style="color: #0D47A1; font-size: 36px; margin: 0;">{threat_level}</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Sidebar - Emergency Crisis Copilot (Your Secret Weapon)
 with st.sidebar:
@@ -206,10 +196,8 @@ with st.sidebar:
     if st.button("Manual Refresh"):
         st.rerun()
 
-# Tier 3: Event Details (The Body) - Live Threat Feed
+# Auto-refresh toggle
 st.markdown("### Live Threat Feed")
-
-# Auto-refresh using st_autorefresh instead of time.sleep
 auto_refresh = st.checkbox("Enable Auto-Refresh", value=True, key="auto_refresh_main")
 if auto_refresh:
     refresh_interval = st.slider("Refresh Interval (seconds)", min_value=1, max_value=30, value=5, key="refresh_slider")
@@ -233,40 +221,24 @@ if alerts:
     }
     
     # Display the dataframe
-    st.dataframe(threat_data, use_container_width=True, height=400)
+    st.dataframe(threat_data, use_container_width=True, height=300)
 else:
     st.info("No threats detected yet. Monitoring for suspicious activity...")
 
-# Additional info section
+# Threat summary section
+if report_data:
+    st.markdown("### Threat Analysis")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown(f"**Summary:** {report_data.get('summary', 'No summary available.')}")
+        st.markdown(f"**Explanation:** {report_data.get('layman_explanation', 'No explanation available.')}")
+    
+    with col2:
+        st.markdown("**Recommendations:**")
+        for rec in report_data.get('recommendations', []):
+            st.markdown(f"- {rec}")
+
+# Footer
 st.markdown("---")
-st.markdown("### System Information")
-col1, col2 = st.columns(2)
-
-with col1:
-    st.write(f"**API Endpoint:** {API_URL}")
-    st.write(f"**Last Refresh:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    if report_data:
-        st.write(f"**Current Threat Level:** {threat_level}")
-
-with col2:
-    st.write("**Service Status:**")
-    # Check if services are responding
-    try:
-        api_check = requests.get(f"{API_URL}/status", timeout=2)
-        api_status = "Running" if api_check.status_code == 200 else "Down"
-    except:
-        api_status = "Down"
-    
-    st.write(f"- Brain API: {api_status}")
-    
-    # Check proxy status
-    try:
-        proxy_check = requests.get("http://localhost:8080/status", timeout=2)
-        proxy_status = "Running" if proxy_check.status_code == 200 else "Down"
-    except:
-        proxy_status = "Down"
-    
-    st.write(f"- Neutrophil Proxy: {proxy_status}")
-
-st.markdown("---")
-st.caption("Pro Tip: Enable auto-refresh in the main panel to continuously monitor threats. Use the Emergency Crisis Copilot in the sidebar for instant response guidance.")
+st.markdown(f"<div style='text-align: center; color: #666; padding: 10px;'>ImmuniSOC-Nexus • Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} • API: {API_URL}</div>", unsafe_allow_html=True)

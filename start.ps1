@@ -1,4 +1,4 @@
-# Start all three services of the Zero-Trust Deception Proxy POC with health checks
+# Start all three services of ImmuniSOC-Nexus with health checks
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Display ASCII banner
@@ -9,7 +9,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
    | | (_) | |  \__ \ |_| | (_| | |_| | (__|   < 
    |_|\___/|_|  |___/\__|_|\__,_|\__|_|\___|_|\_\
 
-  Zero-Trust Deception Proxy POC
+  ImmuniSOC-Nexus
   Starting Services in Order: API → Proxy → Dashboard
 "@ | Write-Host -ForegroundColor Cyan
 Write-Host ""
@@ -73,13 +73,13 @@ if (-not (Wait-ServiceHealth -Port 8000 -ServiceName "Brain API")) {
     exit 1
 }
 
-# 2. Start the Neutrophil Go Proxy
-Write-Host "`nStep 2: Starting Neutrophil Go Proxy on Port 8080..." -ForegroundColor Green
+# 2. Start the ImmuniSOC-Nexus Go Proxy
+Write-Host "`nStep 2: Starting ImmuniSOC-Nexus Go Proxy on Port 8080..." -ForegroundColor Green
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$root'; `$env:BRAIN_API_URL='http://localhost:8000/alert'; `$env:API_KEY='$($env:API_KEY)'; Write-Host 'Starting Go Proxy...'; go run proxy.go; Write-Host 'Go Proxy stopped. Press any key to exit.' -ForegroundColor Red; \$null = \$Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')" -WorkingDirectory $root
 
 # Wait for Proxy to be healthy before continuing
-if (-not (Wait-ServiceHealth -Port 8080 -ServiceName "Go Proxy")) {
-    Write-Host "Cannot proceed: Go Proxy failed to start." -ForegroundColor Red
+if (-not (Wait-ServiceHealth -Port 8080 -ServiceName "ImmuniSOC-Nexus Go Proxy")) {
+    Write-Host "Cannot proceed: ImmuniSOC-Nexus Go Proxy failed to start." -ForegroundColor Red
     Write-Host "Possible fixes:" -ForegroundColor Red
     Write-Host "  - Ensure Go is installed and available in your PATH" -ForegroundColor Red
     Write-Host "  - Run 'go version' to verify Go installation" -ForegroundColor Red
@@ -96,7 +96,7 @@ Start-Sleep -Seconds 3
 
 Write-Host "`n🎉 All services started successfully!" -ForegroundColor Green
 Write-Host "Brain API: http://localhost:8000" -ForegroundColor White
-Write-Host "Proxy: http://localhost:8080" -ForegroundColor White
+Write-Host "ImmuniSOC-Nexus Proxy: http://localhost:8080" -ForegroundColor White
 Write-Host "Dashboard: http://localhost:8501" -ForegroundColor White
 Write-Host ""
 Write-Host "💡 Tips:" -ForegroundColor Yellow

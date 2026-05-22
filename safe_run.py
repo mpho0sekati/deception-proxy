@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Safe Run Script for Deception Proxy
+Safe Run Script for ImmuniSOC-Nexus
 This script checks if the environment is set up correctly and runs the project.
 """
 import subprocess
@@ -159,7 +159,7 @@ def run_proxy(api_key):
     env['API_KEY'] = api_key
     
     cmd = "go run proxy.go"
-    run_command_with_env(cmd, "Proxy Server", env)
+    run_command_with_env(cmd, "ImmuniSOC-Nexus Proxy Server", env)
 
 def run_dashboard(api_key):
     """Run the dashboard."""
@@ -174,7 +174,7 @@ def run_dashboard(api_key):
     run_command_with_env(cmd, "Dashboard", env)
 
 def main():
-    print("🛡️  Zero-Trust Deception Proxy POC")
+    print("🛡️  ImmuniSOC-Nexus")
     print("   Safe Runner with Health Checks")
     print("="*50)
     
@@ -210,9 +210,9 @@ def main():
     api_key = os.environ.get('API_KEY') or secrets.token_urlsafe(32)
     print(f"Using API Key: {api_key[:8]}...")
     
-    print("\nStarting Deception Proxy services in order: API → Proxy → Dashboard...")
+    print("\nStarting ImmuniSOC-Nexus services in order: API → Proxy → Dashboard...")
     print("The Brain API will start on http://localhost:8000")
-    print("The Proxy will start on http://localhost:8080")
+    print("The ImmuniSOC-Nexus Proxy will start on http://localhost:8080")
     print("The Dashboard will start on http://localhost:8501")
     print("\nPress Ctrl+C to stop all services\n")
     
@@ -226,13 +226,13 @@ def main():
         print("Cannot proceed: Brain API failed to start.")
         sys.exit(1)
     
-    print("\nStep 2: Starting Go Proxy on Port 8080...")
+    print("\nStep 2: Starting ImmuniSOC-Nexus Proxy on Port 8080...")
     proxy_thread = threading.Thread(target=run_proxy, args=(api_key,))
     proxy_thread.start()
     
     # Wait for Proxy to be available before starting the dashboard
-    if not wait_for_service("localhost", 8080, "Go Proxy", timeout=45):
-        print("Cannot proceed: Go Proxy failed to start.")
+    if not wait_for_service("localhost", 8080, "ImmuniSOC-Nexus Proxy", timeout=45):
+        print("Cannot proceed: ImmuniSOC-Nexus Proxy failed to start.")
         print("Possible fixes:")
         print("  - Ensure Go is installed and available in your PATH")
         print("  - Run 'go version' to verify Go installation")

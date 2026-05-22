@@ -1,4 +1,4 @@
-# Zero-Trust Deception Proxy POC
+# ImmuniSOC-Nexus
 
 A safety-first proof of concept for a Zero-Trust deception mesh. The system is designed to detect unauthorized access to a honeytoken route, quarantine the source IP, and display incident status clearly in the SOC dashboard.
 
@@ -16,6 +16,7 @@ A safety-first proof of concept for a Zero-Trust deception mesh. The system is d
 - **API Key Authentication**: Added X-API-Key header authentication on write endpoints for enhanced security
 - **CORS Middleware**: Added CORS support for cross-origin requests
 - **Reset Endpoint**: Added POST `/reset` endpoint for clean demo resets
+- **Clean Dashboard Interface**: Simplified, professional dashboard focusing on key metrics and threat visualization
 - **Improved Dashboard Experience**: Replaced time.sleep() loop with st_autorefresh for smoother UI experience without flickering
 - **Dashboard Reset Button**: Added Reset button to the dashboard sidebar for easy system resets
 - **Clean Disconnect State**: Added st.stop() on connection error for clean disconnect state
@@ -34,16 +35,16 @@ A safety-first proof of concept for a Zero-Trust deception mesh. The system is d
 
 ## Integration with Existing Infrastructure
 
-To integrate the Zero-Trust Deception Proxy into existing banking or government infrastructure without "breaking" current systems, you should use the "Sidecar" or "Transparent Proxy" pattern:
+To integrate ImmuniSOC-Nexus into existing banking or government infrastructure without "breaking" current systems, you should use the "Sidecar" or "Transparent Proxy" pattern:
 
 ### Sidecar Pattern
-Deploy the deception proxy alongside existing services as a sidecar container or process. This allows the proxy to intercept and inspect traffic without modifying the existing application code.
+Deploy ImmuniSOC-Nexus alongside existing services as a sidecar container or process. This allows the system to intercept and inspect traffic without modifying the existing application code.
 
 ### Transparent Proxy Pattern
-Position the proxy in the network path to transparently inspect traffic between clients and servers. The proxy operates without requiring any configuration changes on client or server applications.
+Position ImmuniSOC-Nexus in the network path to transparently inspect traffic between clients and servers. The system operates without requiring any configuration changes on client or server applications.
 
 ### Implementation Steps
-1. **Traffic Interception**: Configure your network to route specific traffic through the deception proxy
+1. **Traffic Interception**: Configure your network to route specific traffic through ImmuniSOC-Nexus
 2. **Honeypot Paths**: Define honeypot endpoints that mimic legitimate system paths but are designed to detect unauthorized access
 3. **Alert Integration**: Connect the Brain API to your existing SIEM or monitoring systems
 4. **Gradual Rollout**: Start with non-critical systems to validate the integration before expanding to more sensitive areas
@@ -103,7 +104,7 @@ The project requires the following Python packages:
 1. **Clone the repository:**
    ```bash
    git clone <your-repository-url>
-   cd deception-proxy
+   cd immuniSOC-nexus
    ```
 
 2. **Install Go** (if not already installed):
@@ -111,25 +112,25 @@ The project requires the following Python packages:
    - Follow installation instructions for your OS
 
 3. **Install Python dependencies:**
-   bash
+   ```bash
    python setup_env.py
-   
+   ```
    OR
-   powershell
+   ```powershell
    python -m venv venv
    # On Windows:
    venv\Scripts\activate
    # On macOS/Linux:
    source venv/bin/activate
    pip install -r requirements.txt
-   
+   ```
 
 4. **Run the system:**
-   powershell
+   ```powershell
    python safe_run.py
-   
+   ```
    OR
-   powershell
+   ```powershell
    .\start.ps1
    ```
 
@@ -151,7 +152,7 @@ Run all services from the repository root:
 This starts:
 
 - Brain API on `http://localhost:8000`
-- Neutrophil proxy on `http://localhost:8080`
+- ImmuniSOC-Nexus proxy on `http://localhost:8080`
 - Streamlit dashboard on `http://localhost:8501`
 
 Alternative launch scripts:
@@ -175,37 +176,29 @@ The Brain API exposes the following endpoints:
 
 ## Dashboard Features
 
-The SOC dashboard (`dashboard.py`) follows a 3-Tier Information Hierarchy:
+The SOC dashboard (`dashboard.py`) provides:
 
-### Tier 1: Global Health (The Header)
-- Large flashing status indicator showing system state:
-  - "BREACH DETECTED" (flashing red for CRITICAL)
-  - "THREAT DETECTED" (orange for MEDIUM) 
-  - "SYSTEM SECURE" (green for SAFE)
+### Key Security Metrics
+- Total Attacks Blocked
+- Active Quarantined IPs
+- Current Threat Level
 
-### Tier 2: Key Performance Indicators (The Top Row)
-- Total Attacks Blocked metric
-- System Uptime counter
-- Active Quarantined IPs count
-
-### Tier 3: Event Details (The Body)
-- Live Threat Feed with auto-refresh capability
+### Live Threat Feed
 - Real-time event streaming from the proxy
 - Historical threat data with timestamps
+- Auto-refresh capability
 
-### Emergency Crisis Copilot
-- Report generation with one-click functionality
-- Emergency contact information (SAPS, CSIRT)
-- Immediate action checklist
-- System reset capability
-- Manual refresh option
+### Threat Analysis
+- Current threat summary
+- Layman explanation of the threat
+- Actionable recommendations
 
 ## How to use
 
 1. Open the dashboard at `http://localhost:8501`
 2. Send normal traffic through the proxy, for example:
    - `http://localhost:8080/api/v1/public-news`
-3. Simulate an attack by requesting the honeytoken path:
+3. Simulate an attack by requesting the honeypot path:
    - `http://localhost:8080/api/v2/financial-export`
 4. The proxy will quarantine the attacking IP and the dashboard will update the incident status.
 

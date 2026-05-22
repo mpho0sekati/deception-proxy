@@ -1,4 +1,4 @@
-# Zero-Trust Deception Proxy Defensive Validation Script
+# ImmuniSOC-Nexus Defensive Validation Script
 # Tests the honeypot detection and IP quarantine functionality
 
 # Function to print a formatted step header
@@ -55,7 +55,7 @@ function Invoke-ApiCall {
     }
 }
 
-Print-StepHeader "DECEPTION PROXY VALIDATION TEST" "Cyan"
+Print-StepHeader "IMMUNISOC-NEXUS VALIDATION TEST" "Cyan"
 
 # Get API key from environment or use default
 $apiKey = $env:API_KEY
@@ -77,7 +77,7 @@ if ($resetError) {
     Write-Host "Warning: Reset failed - $resetError" -ForegroundColor Yellow
     Write-Host "This may be expected if the API is not running yet." -ForegroundColor Yellow
 } else {
-    Write-Host "✓ System reset completed" -ForegroundColor Green
+    Write-Host "[CHECK] System reset completed" -ForegroundColor Green
 }
 
 Write-Host ""
@@ -90,9 +90,9 @@ Write-Host "Sending normal request to public endpoint..." -ForegroundColor Green
 
 try {
     $normalResponse = Invoke-RestMethod -Uri "http://localhost:8080/api/v1/public-news" -TimeoutSec 10
-    Write-Host "✓ Normal request succeeded: $normalResponse" -ForegroundColor Green
+    Write-Host "[SUCCESS] Normal request succeeded: $normalResponse" -ForegroundColor Green
 } catch {
-    Write-Host "✗ Normal request failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "[ERROR] Normal request failed: $($_.Exception.Message)" -ForegroundColor Red
 }
 
 
@@ -102,12 +102,12 @@ Write-Host "Triggering honeypot with unauthorized access attempt..." -Foreground
 
 try {
     $honeypotResponse = Invoke-WebRequest -Uri "http://localhost:8080/api/v2/financial-export" -TimeoutSec 10 -ErrorAction Stop
-    Write-Host "✗ Honeypot access should have been blocked! Status: $($honeypotResponse.StatusCode)" -ForegroundColor Red
+    Write-Host "[ERROR] Honeypot access should have been blocked! Status: $($honeypotResponse.StatusCode)" -ForegroundColor Red
 } catch {
     if ($_.Exception.Response.StatusCode.Value__ -eq 403) {
-        Write-Host "✓ Honeypot correctly blocked unauthorized access (403 Forbidden)" -ForegroundColor Green
+        Write-Host "[CHECK] Honeypot correctly blocked unauthorized access (403 Forbidden)" -ForegroundColor Green
     } else {
-        Write-Host "✗ Unexpected response: $($_.Exception.Response.StatusCode.Value__)" -ForegroundColor Red
+        Write-Host "[ERROR] Unexpected response: $($_.Exception.Response.StatusCode.Value__)" -ForegroundColor Red
     }
 }
 
@@ -118,12 +118,12 @@ Write-Host "Testing if IP is quarantined by sending another normal request..." -
 
 try {
     $quarantineResponse = Invoke-WebRequest -Uri "http://localhost:8080/api/v1/public-news" -TimeoutSec 10 -ErrorAction Stop
-    Write-Host "✗ IP should be quarantined! Status: $($quarantineResponse.StatusCode)" -ForegroundColor Red
+    Write-Host "[ERROR] IP should be quarantined! Status: $($quarantineResponse.StatusCode)" -ForegroundColor Red
 } catch {
     if ($_.Exception.Response.StatusCode.Value__ -eq 403) {
-        Write-Host "✓ IP successfully quarantined (403 Forbidden)" -ForegroundColor Green
+        Write-Host "[CHECK] IP successfully quarantined (403 Forbidden)" -ForegroundColor Green
     } else {
-        Write-Host "✗ Unexpected response: $($_.Exception.Response.StatusCode.Value__)" -ForegroundColor Red
+        Write-Host "[ERROR] Unexpected response: $($_.Exception.Response.StatusCode.Value__)" -ForegroundColor Red
     }
 }
 
@@ -140,30 +140,30 @@ $headers = @{
 
 try {
     $attackResponse1 = Invoke-WebRequest -Uri "http://localhost:8080/api/v2/financial-export" -Headers $headers -TimeoutSec 10 -ErrorAction Stop
-    Write-Host "✗ Attack 1 should have been blocked!" -ForegroundColor Red
+    Write-Host "[ERROR] Attack 1 should have been blocked!" -ForegroundColor Red
 } catch {
     if ($_.Exception.Response.StatusCode.Value__ -eq 403) {
-        Write-Host "✓ IP 192.168.1.100 quarantined (403 Forbidden)" -ForegroundColor Green
+        Write-Host "[CHECK] IP 192.168.1.100 quarantined (403 Forbidden)" -ForegroundColor Green
     }
 }
 
 $headers["X-Forwarded-For"] = "192.168.1.101"
 try {
     $attackResponse2 = Invoke-WebRequest -Uri "http://localhost:8080/api/v2/financial-export" -Headers $headers -TimeoutSec 10 -ErrorAction Stop
-    Write-Host "✗ Attack 2 should have been blocked!" -ForegroundColor Red
+    Write-Host "[ERROR] Attack 2 should have been blocked!" -ForegroundColor Red
 } catch {
     if ($_.Exception.Response.StatusCode.Value__ -eq 403) {
-        Write-Host "✓ IP 192.168.1.101 quarantined (403 Forbidden)" -ForegroundColor Green
+        Write-Host "[CHECK] IP 192.168.1.101 quarantined (403 Forbidden)" -ForegroundColor Green
     }
 }
 
 $headers["X-Forwarded-For"] = "192.168.1.102"
 try {
     $attackResponse3 = Invoke-WebRequest -Uri "http://localhost:8080/api/v2/financial-export" -Headers $headers -TimeoutSec 10 -ErrorAction Stop
-    Write-Host "✗ Attack 3 should have been blocked!" -ForegroundColor Red
+    Write-Host "[ERROR] Attack 3 should have been blocked!" -ForegroundColor Red
 } catch {
     if ($_.Exception.Response.StatusCode.Value__ -eq 403) {
-        Write-Host "✓ IP 192.168.1.102 quarantined (403 Forbidden)" -ForegroundColor Green
+        Write-Host "[CHECK] IP 192.168.1.102 quarantined (403 Forbidden)" -ForegroundColor Green
     }
 }
 
@@ -175,7 +175,7 @@ Write-Host "Retrieving final system status..." -ForegroundColor Cyan
 $statusResult, $statusError = Invoke-ApiCall -Uri "http://localhost:8000/status"
 
 if ($statusError) {
-    Write-Host "✗ Could not retrieve status: $statusError" -ForegroundColor Red
+    Write-Host "[ERROR] Could not retrieve status: $statusError" -ForegroundColor Red
 } else {
     $totalAlerts = $statusResult.total_alerts
     $uniqueIPs = ($statusResult.alerts | ForEach-Object { $_.ip } | Sort-Object -Unique).Count
@@ -192,17 +192,17 @@ if ($statusError) {
     $reportResult, $reportError = Invoke-ApiCall -Uri "http://localhost:8000/report"
     
     if ($reportError) {
-        Write-Host "✗ Could not retrieve threat level: $reportError" -ForegroundColor Red
+        Write-Host "[ERROR] Could not retrieve threat level: $reportError" -ForegroundColor Red
     } else {
         $threatLevel = $reportResult.threat_level
         Write-Host "Current threat level: $threatLevel" -ForegroundColor White
         
         if ($threatLevel -eq "CRITICAL") {
-            Write-Host "🎉 SUCCESS: Multi-IP attack successfully triggered CRITICAL state!" -ForegroundColor Green
+            Write-Host "[SUCCESS] Multi-IP attack successfully triggered CRITICAL state!" -ForegroundColor Green
         } elseif ($threatLevel -eq "MEDIUM") {
-            Write-Host "✓ MEDIUM threat level detected (expected if only 1-2 IPs were quarantined)" -ForegroundColor Yellow
+            Write-Host "[INFO] MEDIUM threat level detected (expected if only 1-2 IPs were quarantined)" -ForegroundColor Yellow
         } else {
-            Write-Host "⚠ Threat level is $threatLevel (expected if no attacks were successful)" -ForegroundColor Yellow
+            Write-Host "[WARNING] Threat level is $threatLevel (expected if no attacks were successful)" -ForegroundColor Yellow
         }
     }
 }

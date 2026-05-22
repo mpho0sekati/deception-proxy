@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, Depends  # type: ignore[import]
+from fastapi import FastAPI, HTTPException, Depends, HTTPException  # type: ignore[import]
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, IPvAnyAddress
 from datetime import datetime
 from typing import List
 import os
@@ -8,7 +8,11 @@ import sqlite3
 import json
 import secrets
 
-app = FastAPI(title="Neutrophil Deception Brain API")
+app = FastAPI(
+    title="ImmuniSOC-Nexus Brain API",
+    description="API for the ImmuniSOC-Nexus deception proxy system",
+    version="1.0.0"
+)
 
 # Add CORS middleware
 app.add_middleware(
@@ -23,18 +27,26 @@ app.add_middleware(
 API_KEY = os.getenv("API_KEY", secrets.token_urlsafe(32))  # Generate a random API key if not set
 API_KEY_NAME = "X-API-Key"
 
-def get_api_key(api_key_header: str = Depends(lambda: os.getenv("API_KEY"))):
-    """Dependency to check for valid API key on write endpoints."""
-    def api_key_dependency(header: str = None):
-        if header != api_key_header:
-            raise HTTPException(status_code=401, detail="Invalid API Key")
-        return header
-    return api_key_dependency
+def verify_api_key(x_api_key: str = None):
+    """Verify the API key from environment variable."""
+    expected_api_key = os.getenv("API_KEY")
+    if not expected_api_key:
+        # Generate a random API key if not set
+        import secrets
+        expected_api_key = secrets.token_urlsafe(32)
+        os.environ["API_KEY"] = expected_api_key
+    
+    if not x_api_key or x_api_key != expected_api_key:
+        raise HTTPException(status_code=401, detail="Invalid API Key")
 
-# Initialize SQLite database
+# Database setup
+DB_PATH = "alerts.db"
+
 def init_db():
-    conn = sqlite3.connect('alerts.db')
+    """Initialize the SQLite database with alerts table."""
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    # Create alerts table with proper schema
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS alerts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,20 +61,118 @@ def init_db():
 # Initialize the database on startup
 init_db()
 
-# Function to persist alerts to JSON file as well
-def persist_to_json():
-    """Persist alerts from SQLite to JSON file."""
-    conn = sqlite3.connect('alerts.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT ip, trigger, timestamp FROM alerts ORDER BY timestamp DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    
-    alerts_list = [{"ip": row[0], "trigger": row[1], "timestamp": row[2]} for row in rows]
-    
-    # Write to JSON file
-    with open('alerts.json', 'w') as f:
-        json.dump(alerts_list, f, indent=2)
+# Helper function to validate and convert IP
+def validate_ip(ip: str) -> str:
+    """Validate and normalize IP address."""
+    try:
+        # This will raise an exception if the IP is invalid
+        validated_ip = IPvAnyAddress.validate_python(ip)
+        return str(validated_ip)
+    except Exception:
+        raise ValueError(f"Invalid IP address: {ip}")
+
+# Context manager for database connections
+@contextmanager
+def get_db_connection():
+    """Context manager for database connections."""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+# Async function to generate threat report
+async def generate_threat_report(report: ReportResponse = None):
+    """Generate a threat report file."""
+    try:
+        if report is None:
+            # Get current report
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT DISTINCT ip FROM alerts")
+                unique_ips = [row[0] for row in cursor.fetchall()]
+                
+                cursor.execute("SELECT ip, trigger, timestamp FROM alerts ORDER BY timestamp DESC")
+                all_alerts = [
+                    {"ip": ip, "trigger": trigger, "timestamp": timestamp}
+                    for ip, trigger, timestamp in cursor.fetchall()
+                ]
+            
+            total_incidents = len(all_alerts)
+            
+            if total_incidents == 0:
+                threat_level = "SAFE"
+            elif total_incidents <= 3 and len(unique_ips) <= 2:
+                threat_level = "LOW"
+            elif total_incidents <= 10 or len(unique_ips) <= 5:
+                threat_level = "MEDIUM"
+            else:
+                threat_level = "CRITICAL"
+            
+            if threat_level == "SAFE":
+                summary = "No intrusion attempts detected. The deception mesh is active and healthy."
+                layman_explanation = "Everything is normal. The digital security guards are patrolling the perimeter, and no alarms have been triggered."
+                recommendations = [
+                    "Maintain standard operations. No emergency actions required.",
+                    "Verify that staff understand basic password safety and phishing awareness."
+                ]
+            elif threat_level == "LOW":
+                summary = "Minor intrusion attempts detected. Automated defenses have contained the threats."
+                layman_explanation = "A few suspicious activities were detected and automatically blocked. Think of it as a few curious visitors who wandered into restricted areas and were escorted out."
+                recommendations = [
+                    "Monitor the situation closely for any recurring patterns.",
+                    "Review access logs for any anomalies that might have been missed."
+                ]
+            elif threat_level == "MEDIUM":
+                summary = "Multiple intrusion attempts detected. Defense mechanisms are actively engaged."
+                layman_explanation = "Several attempts to access restricted areas have been detected and blocked. This suggests a more coordinated effort to breach security measures."
+                recommendations = [
+                    "Increase monitoring of affected systems.",
+                    "Consider temporarily restricting access to sensitive areas if pattern continues.",
+                    "Brief IT security team on recent attack vectors."
+                ]
+            else:  # CRITICAL
+                summary = "Significant security breach attempts detected. Immediate attention required."
+                layman_explanation = "Multiple systematic attempts to breach security have been detected. The system has automatically blocked these attempts, but human oversight is needed."
+                recommendations = [
+                    "Escalate to senior security personnel immediately.",
+                    "Conduct comprehensive audit of all access logs.",
+                    "Prepare incident response procedures.",
+                    "Consider isolating affected systems if pattern persists."
+                ]
+            
+            report = ReportResponse(
+                timestamp=datetime.utcnow().isoformat() + "Z",
+                threat_level=threat_level,
+                total_incidents=total_incidents,
+                quarantined_ips=unique_ips,
+                summary=summary,
+                layman_explanation=layman_explanation,
+                recommendations=recommendations,
+                incidents=all_alerts
+            )
+        
+        # Write to threat report file
+        with open("threat_report.md", "w") as f:
+            f.write(f"# IMMUNISOC-NEXUS THREAT REPORT\n\n")
+            f.write(f"**Generated at:** {report.timestamp}\n\n")
+            f.write(f"## Threat Level: {report.threat_level}\n\n")
+            f.write(f"### Summary\n{report.summary}\n\n")
+            f.write(f"### Layman Explanation\n{report.layman_explanation}\n\n")
+            f.write(f"### Recommendations\n")
+            for rec in report.recommendations:
+                f.write(f"- {rec}\n")
+            f.write(f"\n### Quarantined IPs\n")
+            for ip in report.quarantined_ips:
+                f.write(f"- {ip}\n")
+            f.write(f"\n### Incidents\n")
+            for incident in report.incidents[:10]:  # Limit to last 10 incidents
+                f.write(f"- {incident['timestamp']}: {incident['ip']} triggered '{incident['trigger']}'\n")
+            if len(report.incidents) > 10:
+                f.write(f"... and {len(report.incidents) - 10} more incidents\n")
+        
+    except Exception as e:
+        print(f"Error generating threat report: {e}")
 
 # --- Pydantic Data Policing (Validation Schemas) ---
 
@@ -70,7 +180,20 @@ class AlertPayload(BaseModel):
     ip: str = Field(..., example="127.0.0.1", description="Attacker IP address")
     trigger: str = Field(..., example="honeytoken_accessed", description="Deception trap trigger type")
 
-class SecurityReport(BaseModel):
+class Alert(BaseModel):
+    ip: IPvAnyAddress  # Validates any IP address format
+    trigger: str
+
+class AlertResponse(BaseModel):
+    message: str
+    timestamp: str
+    ip: str
+
+class StatusResponse(BaseModel):
+    total_alerts: int
+    alerts: List[Dict]
+
+class ReportResponse(BaseModel):
     timestamp: str
     threat_level: str
     total_incidents: int
@@ -78,37 +201,66 @@ class SecurityReport(BaseModel):
     summary: str
     layman_explanation: str
     recommendations: List[str]
-    incidents: List[AlertPayload]
+    incidents: List[Dict]
 
 # --- Endpoints ---
 
-@app.post("/alert")
-def create_alert(payload: AlertPayload, api_key: str = Depends(get_api_key(API_KEY))):
-    # Validate IP format (basic validation)
-    import ipaddress
+@app.post("/alert", response_model=AlertResponse)
+async def create_alert(alert: Alert, api_key: str = Depends(verify_api_key)):
+    """
+    Create a new alert from the deception proxy.
+    The proxy calls this when it detects suspicious activity.
+    """
     try:
-        ipaddress.ip_address(payload.ip)
-    except ValueError:
-        return {"status": "error", "message": "Invalid IP address format"}
-    
-    conn = sqlite3.connect('alerts.db')
-    cursor = conn.cursor()
-    alert = {
-        "ip": payload.ip,
-        "trigger": payload.trigger,
-        "timestamp": datetime.utcnow().isoformat() + "Z"
-    }
-    cursor.execute(
-        "INSERT INTO alerts (ip, trigger, timestamp) VALUES (?, ?, ?)",
-        (payload.ip, payload.trigger, alert["timestamp"])
-    )
-    conn.commit()
-    conn.close()
-    
-    # Persist to JSON as well
-    persist_to_json()
-    
-    return {"status": "received", "alert": alert}
+        # Validate and normalize the IP
+        validated_ip = validate_ip(str(alert.ip))
+        
+        # Store alert in database
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO alerts (ip, trigger, timestamp) VALUES (?, ?, ?)",
+                (validated_ip, alert.trigger, timestamp)
+            )
+            conn.commit()
+        
+        # Write to JSON file for backup/diagnostic purposes
+        alert_entry = {
+            "ip": validated_ip,
+            "trigger": alert.trigger,
+            "timestamp": timestamp
+        }
+        
+        # Read existing alerts from JSON file
+        alerts_file = "alerts.json"
+        existing_alerts = []
+        if os.path.exists(alerts_file):
+            try:
+                with open(alerts_file, "r") as f:
+                    existing_alerts = json.load(f)
+            except json.JSONDecodeError:
+                existing_alerts = []
+        
+        # Append new alert
+        existing_alerts.append(alert_entry)
+        
+        # Write back to JSON file
+        with open(alerts_file, "w") as f:
+            json.dump(existing_alerts, f, indent=2)
+        
+        # Write to threat report file
+        await generate_threat_report()
+        
+        return AlertResponse(
+            message="Alert received and processed",
+            timestamp=timestamp,
+            ip=validated_ip
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/status")
 def get_status():
@@ -185,24 +337,10 @@ def generate_report():
         incidents=[AlertPayload(ip=a["ip"], trigger=a["trigger"]) for a in alerts_db]
     )
 
-    # Write report file to disk for audit compliance
-    report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "threat_report.md")
-    try:
-        with open(report_path, "w") as f:
-            f.write(f"# SECURITY INCIDENT AUDIT & RESPONSE BRIEF\n")
-            f.write(f"Generated at: {report_data.timestamp}\n\n")
-            f.write(f"## Threat Level: **{report_data.threat_level}**\n\n")
-            f.write(f"### Plain-English Event Explanation\n{report_data.layman_explanation}\n\n")
-            f.write(f"### Technical Summary\n{report_data.summary}\n\n")
-            f.write(f"### Quarantined Devices (IPs)\n")
-            for ip in report_data.quarantined_ips:
-                f.write(f"- {ip}\n")
-            f.write(f"\n### Action Checklist for Staff\n")
-            for rec in report_data.recommendations:
-                f.write(f"- [ ] {rec}\n")
-            f.write(f"\n### Incident Logs\n")
-            for idx, incident in enumerate(report_data.incidents):
-                f.write(f"{idx+1}. **Device IP**: `{incident.ip}` | **Trap Trigger**: `{incident.trigger}`\n")
+    # Write to threat report file
+    await generate_threat_report(report_data)
+    
+    return report_data
     except Exception as e:
         print(f"Error writing audit report file: {e}")
 
@@ -210,23 +348,27 @@ def generate_report():
 
 # Reset endpoint for clean demo resets
 @app.post("/reset")
-def reset_system(api_key: str = Depends(get_api_key(API_KEY))):
-    """Reset the system by clearing all alerts from the database."""
-    conn = sqlite3.connect('alerts.db')
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM alerts")
-    conn.commit()
-    conn.close()
-    
-    # Also clear the JSON file
-    if os.path.exists('alerts.json'):
-        os.remove('alerts.json')
-    
-    # Clear the threat report
-    if os.path.exists('threat_report.md'):
-        os.remove('threat_report.md')
-    
-    return {"status": "reset", "message": "System reset successfully"}
+async def reset_system(api_key: str = Depends(verify_api_key)):
+    """Reset all alerts from the system."""
+    try:
+        # Clear database
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM alerts")
+            conn.commit()
+        
+        # Clear JSON file
+        if os.path.exists("alerts.json"):
+            with open("alerts.json", "w") as f:
+                json.dump([], f)
+        
+        # Clear threat report
+        if os.path.exists("threat_report.md"):
+            os.remove("threat_report.md")
+        
+        return {"message": "System reset successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

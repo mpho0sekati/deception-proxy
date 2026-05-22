@@ -85,13 +85,13 @@ func getClientIP(r *http.Request) string {
 
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
-func sendAlert(attackerIP, brainAPIURL, brainAPIKey string) {
+func sendAlert(attackerIP, brainAPIURL string) {
     // Validate IP before sending alert
     if !validateIP(attackerIP) {
         log.Printf("[ERROR] Invalid IP address provided for alert: %s", attackerIP)
         return
     }
-
+    
     payload := map[string]string{
         "ip":      attackerIP,
         "trigger": "honeytoken_accessed",
@@ -104,19 +104,17 @@ func sendAlert(attackerIP, brainAPIURL, brainAPIKey string) {
 
     req, err := http.NewRequest("POST", brainAPIURL, bytes.NewBuffer(jsonPayload))
     if err != nil {
-        log.Printf("[ERROR] Failed to create request for Brain API: %v", err)
+        log.Printf("[ERROR] Failed to create alert request: %v", err)
         return
     }
-
+    
     // Add API key header if available
-    if brainAPIKey != "" {
-        req.Header.Set("X-API-Key", brainAPIKey)
+    apiKey := os.Getenv("API_KEY")
+    if apiKey != "" {
+        req.Header.Set("X-API-Key", apiKey)
     }
-
+    
     req.Header.Set("Content-Type", "application/json")
-    if brainAPIKey != "" {
-        req.Header.Set("Authorization", "Bearer "+brainAPIKey)
-    }
 
     resp, err := httpClient.Do(req)
     if err != nil {
@@ -143,9 +141,9 @@ func startDummyBackend(ctx context.Context, addr string) *http.Server {
 
     server := &http.Server{Addr: addr, Handler: mux}
     go func() {
-        log.Printf("[Dummy Backend] Listening on %s", addr)
+        log.Printf("[ImmuniSOC-Nexus Dummy Backend] Listening on %s", addr)
         if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-            log.Fatalf("[Dummy Backend] Failed: %v", err)
+            log.Fatalf("[ImmuniSOC-Nexus Dummy Backend] Failed: %v", err)
         }
     }()
 
@@ -162,7 +160,6 @@ func main() {
     backendAddr := envOrDefault("BACKEND_ADDR", defaultBackendAddr)
     brainAPIURL := envOrDefault("BRAIN_API_URL", defaultBrainAPIURL)
     honeytokenPath := envOrDefault("HONEYTOKEN_PATH", defaultHoneytokenPath)
-    brainAPIKey := envOrDefault("BRAIN_API_KEY", "")
 
     ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer stop()
@@ -206,32 +203,32 @@ func main() {
         }
 
         if mesh.IsBlocked(ip) {
-            log.Printf("[BLOCK] %s blocked by quarantine path=%s", ip, r.URL.Path)
+            log.Printf("[ImmuniSOC-Nexus BLOCK] %s blocked by quarantine path=%s", ip, r.URL.Path)
             http.Error(w, "403 Forbidden - IP Quarantined", http.StatusForbidden)
             return
         }
 
         if r.URL.Path == honeytokenPath {
-            log.Printf("[ALERT] Honeytoken access triggered by %s", ip)
+            log.Printf("[ImmuniSOC-Nexus ALERT] Honeytoken access triggered by %s", ip)
             mesh.Block(ip)
-            go sendAlert(ip, brainAPIURL, brainAPIKey)
+            go sendAlert(ip, brainAPIURL)
             http.Error(w, "403 Forbidden", http.StatusForbidden)
             return
         }
 
-        log.Printf("[PROXY] Forwarding request from %s to backend path=%s", ip, r.URL.Path)
+        log.Printf("[ImmuniSOC-Nexus PROXY] Forwarding request from %s to backend path=%s", ip, r.URL.Path)
         proxy.ServeHTTP(w, r)
     })
 
     server := &http.Server{Addr: ":" + proxyPort, Handler: handler}
     go func() {
-        log.Printf("[Neutrophil Proxy] Listening on port %s", proxyPort)
+        log.Printf("[ImmuniSOC-Nexus Proxy] Listening on port %s", proxyPort)
         if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-            log.Fatalf("Proxy server failed: %v", err)
+            log.Fatalf("ImmuniSOC-Nexus proxy server failed: %v", err)
         }
     }()
 
     <-ctx.Done()
-    log.Println("Shutting down Neutrophil proxy...")
+    log.Println("Shutting down ImmuniSOC-Nexus proxy...")
     _ = server.Shutdown(context.Background())
 }

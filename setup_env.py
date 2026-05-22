@@ -10,8 +10,8 @@ def check_virtual_environment():
     return os.path.exists(venv_path) and os.path.isfile(python_path)
 
 def create_virtual_environment():
-    """Create a virtual environment for the deception proxy project."""
-    print("Setting up virtual environment for Deception Proxy...")
+    """Create a virtual environment for the ImmuniSOC-Nexus project."""
+    print("Setting up virtual environment for ImmuniSOC-Nexus...")
     
     # Check if venv already exists
     if check_virtual_environment():
@@ -59,7 +59,7 @@ def create_virtual_environment():
     return True
 
 def run_project():
-    """Run the deception proxy project."""
+    """Run the ImmuniSOC-Nexus project."""
     if not check_virtual_environment():
         print("Virtual environment does not exist. Creating one...")
         if not create_virtual_environment():
@@ -81,7 +81,7 @@ def run_project():
 
 def main():
     """Main function to handle environment setup."""
-    print("Deception Proxy Environment Setup")
+    print("ImmuniSOC-Nexus Environment Setup")
     print("="*40)
     
     # Check if requirements.txt exists

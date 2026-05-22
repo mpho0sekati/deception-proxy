@@ -5,7 +5,7 @@ echo   | |/ _ \| '__/ __| __| |/ _` | __| |/ __| |/ /
 echo   | | (_) | |  \__ \ |_| | (_| | |_| | (__|   < 
 echo   |_|\___/|_|  |___/\__|_|\__,_|\__|_|\___|_|\_\
 echo.
-echo   Zero-Trust Deception Proxy POC
+echo   ImmuniSOC-Nexus
 echo   Running Services in Order: API ^-> Proxy ^-> Dashboard
 echo.
 
@@ -49,31 +49,31 @@ if errorlevel 1 (
     echo   - Check the Brain API console window for errors
     echo.
 ) else (
-    echo ✓ Brain API appears to be running
+    echo [CHECK] Brain API appears to be running
 )
 
-REM Start the Go proxy in background
-echo Step 2: Starting Go Proxy on Port 8080...
+REM Start the ImmuniSOC-Nexus Go proxy in background
+echo Step 2: Starting ImmuniSOC-Nexus Go Proxy on Port 8080...
 set BRAIN_API_URL=http://localhost:8000/alert
 set API_KEY=%API_KEY%
-start "Go Proxy" cmd /c "set BRAIN_API_URL=http://localhost:8000/alert^& set API_KEY=%API_KEY%^& echo Starting Go Proxy... ^& go run proxy.go ^& echo Go Proxy stopped. Press any key to exit. ^& pause"
+start "ImmuniSOC-Nexus Proxy" cmd /c "set BRAIN_API_URL=http://localhost:8000/alert^& set API_KEY=%API_KEY%^& echo Starting Go Proxy... ^& go run proxy.go ^& echo Go Proxy stopped. Press any key to exit. ^& pause"
 
 REM Brief wait for Proxy to potentially start
 timeout /t 5 /nobreak >nul
 
 REM Check if Proxy is running (basic check)
-echo Checking if Go Proxy is available...
+echo Checking if ImmuniSOC-Nexus Proxy is available...
 curl -s --connect-timeout 5 http://localhost:8080/status >nul 2>&1
 if errorlevel 1 (
     echo.
-    echo WARNING: Go Proxy may not be running properly
+    echo WARNING: ImmuniSOC-Nexus Proxy may not be running properly
     echo Possible fixes:
     echo   - Ensure Go is installed and available in your PATH
     echo   - Run 'go version' to verify Go installation
     echo   - Check the Go Proxy console window for errors
     echo.
 ) else (
-    echo ✓ Go Proxy appears to be running
+    echo [CHECK] ImmuniSOC-Nexus Proxy appears to be running
 )
 
 REM Start the Streamlit dashboard (this will open in the foreground)
