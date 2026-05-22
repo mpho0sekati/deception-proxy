@@ -54,8 +54,34 @@ def fetch_json(endpoint: str):
     except Exception as e:
         return None, f"Unexpected error: {str(e)}"
 
+def send_alert_to_backend(ip_address, trigger_type):
+    """Send an alert to the backend API"""
+    api_key = os.getenv("API_KEY")
+    if not api_key:
+        # Try to get from session state if available
+        api_key = getattr(st.session_state, 'api_key', 'default_test_key')
+    
+    headers = {
+        "Content-Type": "application/json",
+        "X-API-Key": api_key
+    }
+    
+    payload = {
+        "ip": ip_address,
+        "trigger": trigger_type
+    }
+    
+    try:
+        response = requests.post(f"{API_URL}/alert", json=payload, headers=headers, timeout=TIMEOUT_SECONDS)
+        if response.status_code == 200:
+            return True, response.json()
+        else:
+            return False, f"Backend returned status: {response.status_code}"
+    except Exception as e:
+        return False, f"Error contacting backend: {str(e)}"
+
 def simulate_threat_event(event_type, ip_address=None):
-    """Simulate a threat event and add it to the history"""
+    """Simulate a threat event and send it to the backend"""
     if ip_address is None:
         ip_address = f"192.168.{random.randint(1, 255)}.{random.randint(1, 255)}"
     
@@ -77,6 +103,13 @@ def simulate_threat_event(event_type, ip_address=None):
         "description": event_descriptions.get(event_type, "Unknown threat detected"),
         "severity": random.choice(["LOW", "MEDIUM", "HIGH"])
     }
+    
+    # Send alert to backend
+    success, result = send_alert_to_backend(ip_address, event_type)
+    if success:
+        st.success(f"Alert sent to backend: {event_type} from {ip_address}")
+    else:
+        st.warning(f"Could not send alert to backend: {result}")
     
     # Add to threat history
     st.session_state.threat_history.insert(0, event)
@@ -102,6 +135,19 @@ def reset_system():
     st.session_state.total_alerts = 0
     st.session_state.quarantined_ips = []
     st.session_state.last_simulation_time = datetime.utcnow()
+    
+    # Send reset command to backend
+    api_key = os.getenv("API_KEY")
+    if api_key:
+        headers = {"X-API-Key": api_key}
+        try:
+            response = requests.post(f"{API_URL}/reset", headers=headers, timeout=TIMEOUT_SECONDS)
+            if response.status_code == 200:
+                st.success("Backend system reset successfully!")
+            else:
+                st.warning(f"Backend reset returned status: {response.status_code}")
+        except Exception as e:
+            st.warning(f"Could not reset backend: {str(e)}")
 
 # Sidebar with interactive controls
 with st.sidebar:
