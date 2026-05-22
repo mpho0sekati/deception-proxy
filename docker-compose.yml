@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python api.py
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - API_KEY=${API_KEY:-default_random_generated_key}
+    networks:
+      - deception-net
+
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: proxy
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+    environment:
+      - BACKEND_ADDR=backend:8081
+      - BRAIN_API_URL=http://api:8000/alert
+      - API_KEY=${API_KEY:-default_random_generated_key}
+    depends_on:
+      - api
+    networks:
+      - deception-net
+
+  backend:
+    image: nginx:alpine
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./dummy_backend.conf:/etc/nginx/nginx.conf
+    networks:
+      - deception-net
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: streamlit run dashboard.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    environment:
+      - API_URL=http://api:8000
+      - API_KEY=${API_KEY:-default_random_generated_key}
+    depends_on:
+      - api
+    networks:
+      - deception-net
+
+networks:
+  deception-net:
+    driver: bridge
