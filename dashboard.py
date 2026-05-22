@@ -1,10 +1,10 @@
 import os
 import requests
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from collections import Counter
-import json
+import random
 
 # Import st_autorefresh - this needs to be installed separately
 try:
@@ -52,6 +52,81 @@ if status_error:
     st.error("Unable to reach the Brain API. Confirm the API is running on port 8000.")
     st.code(status_error)
     st.stop()
+
+# Use simulated data if no real data is available
+if status_data and status_data.get("total_alerts", 0) == 0:
+    # Generate simulated data for demonstration
+    simulated_alerts = []
+    current_time = datetime.utcnow()
+    
+    # Create some simulated recent threats
+    for i in range(random.randint(0, 3)):
+        minutes_ago = random.randint(1, 30)
+        simulated_alerts.append({
+            "timestamp": (current_time - timedelta(minutes=minutes_ago)).isoformat() + "Z",
+            "ip": f"192.168.{random.randint(1, 255)}.{random.randint(1, 255)}",
+            "trigger": random.choice([
+                "honeytoken_accessed", 
+                "suspicious_login_attempt", 
+                "brute_force_attack",
+                "sql_injection_probe",
+                "directory_traversal_attempt"
+            ])
+        })
+    
+    status_data = {
+        "total_alerts": len(simulated_alerts),
+        "alerts": simulated_alerts
+    }
+    
+    if not report_data:
+        # Create simulated report data
+        threat_levels = ["SAFE", "LOW", "MEDIUM", "CRITICAL"]
+        simulated_threat_level = random.choice(threat_levels)
+        
+        if simulated_threat_level == "SAFE":
+            summary = "No significant threats detected. Standard monitoring in place."
+            explanation = "Normal system activity with routine scans. All systems operating normally."
+            recommendations = [
+                "Continue standard monitoring",
+                "Perform scheduled security audits",
+                "Update threat intelligence feeds"
+            ]
+        elif simulated_threat_level == "LOW":
+            summary = "Low-level scanning activity detected. Automated defenses contain threats."
+            explanation = "Automated tools have detected and blocked several low-level scan attempts."
+            recommendations = [
+                "Monitor for increased activity",
+                "Review access logs for anomalies",
+                "Verify security patches are up to date"
+            ]
+        elif simulated_threat_level == "MEDIUM":
+            summary = "Moderate threat activity detected. Active monitoring required."
+            explanation = "Multiple access attempts from various sources. Some require investigation."
+            recommendations = [
+                "Investigate flagged IP addresses",
+                "Review authentication logs",
+                "Consider temporary restrictions on suspicious networks"
+            ]
+        else:  # CRITICAL
+            summary = "High-level threats detected. Immediate action required."
+            explanation = "Coordinated attack attempts detected. Defense systems are engaged."
+            recommendations = [
+                "Activate incident response team",
+                "Implement enhanced monitoring",
+                "Consider network segmentation if threat persists"
+            ]
+        
+        report_data = {
+            "timestamp": current_time.isoformat() + "Z",
+            "threat_level": simulated_threat_level,
+            "total_incidents": len(simulated_alerts),
+            "quarantined_ips": [alert["ip"] for alert in simulated_alerts],
+            "summary": summary,
+            "layman_explanation": explanation,
+            "recommendations": recommendations,
+            "incidents": simulated_alerts
+        }
 
 if report_data:
     threat_level = report_data.get("threat_level", "UNKNOWN")
@@ -223,7 +298,7 @@ if alerts:
     # Display the dataframe
     st.dataframe(threat_data, use_container_width=True, height=300)
 else:
-    st.info("No threats detected yet. Monitoring for suspicious activity...")
+    st.info("Simulating security events... Generating realistic threat data for demonstration.")
 
 # Threat summary section
 if report_data:
