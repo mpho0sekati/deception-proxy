@@ -3,8 +3,8 @@ import requests
 import streamlit as st
 from datetime import datetime, timedelta
 import time
-from collections import Counter
 import random
+import json
 
 # Import st_autorefresh - this needs to be installed separately
 try:
@@ -16,15 +16,25 @@ except ImportError:
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 TIMEOUT_SECONDS = 5  # Increased timeout for better reliability
 
-# Initialize session state for storing threat history
+# Initialize session state
 if 'threat_history' not in st.session_state:
     st.session_state.threat_history = []
+if 'demo_mode' not in st.session_state:
+    st.session_state.demo_mode = True
+if 'current_threat_level' not in st.session_state:
+    st.session_state.current_threat_level = "SAFE"
+if 'total_alerts' not in st.session_state:
+    st.session_state.total_alerts = 0
+if 'quarantined_ips' not in st.session_state:
+    st.session_state.quarantined_ips = []
+if 'last_simulation_time' not in st.session_state:
+    st.session_state.last_simulation_time = datetime.utcnow()
 
 st.set_page_config(
     page_title="ImmuniSOC-Nexus Dashboard",
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 def fetch_json(endpoint: str):
@@ -44,134 +54,139 @@ def fetch_json(endpoint: str):
     except Exception as e:
         return None, f"Unexpected error: {str(e)}"
 
-# Fetch current data
-status_data, status_error = fetch_json("/status")
-report_data, report_error = fetch_json("/report")
-
-if status_error:
-    st.error("Unable to reach the Brain API. Confirm the API is running on port 8000.")
-    st.code(status_error)
-    st.stop()
-
-# Use simulated data if no real data is available
-if status_data and status_data.get("total_alerts", 0) == 0:
-    # Generate simulated data for demonstration
-    simulated_alerts = []
-    current_time = datetime.utcnow()
+def simulate_threat_event(event_type, ip_address=None):
+    """Simulate a threat event and add it to the history"""
+    if ip_address is None:
+        ip_address = f"192.168.{random.randint(1, 255)}.{random.randint(1, 255)}"
     
-    # Create some simulated recent threats
-    for i in range(random.randint(0, 3)):
-        minutes_ago = random.randint(1, 30)
-        simulated_alerts.append({
-            "timestamp": (current_time - timedelta(minutes=minutes_ago)).isoformat() + "Z",
-            "ip": f"192.168.{random.randint(1, 255)}.{random.randint(1, 255)}",
-            "trigger": random.choice([
-                "honeytoken_accessed", 
-                "suspicious_login_attempt", 
-                "brute_force_attack",
-                "sql_injection_probe",
-                "directory_traversal_attempt"
-            ])
-        })
-    
-    status_data = {
-        "total_alerts": len(simulated_alerts),
-        "alerts": simulated_alerts
+    event_descriptions = {
+        "honeytoken_access": "Unauthorized access to financial data endpoint",
+        "brute_force": "Multiple failed login attempts from single IP",
+        "sql_injection": "Suspicious SQL query detected in request",
+        "directory_traversal": "Attempt to access restricted system directories",
+        "ddos": "High volume of requests from multiple IPs",
+        "malware_scan": "Malicious payload detected in request body"
     }
     
-    if not report_data:
-        # Create simulated report data
-        threat_levels = ["SAFE", "LOW", "MEDIUM", "CRITICAL"]
-        simulated_threat_level = random.choice(threat_levels)
-        
-        if simulated_threat_level == "SAFE":
-            summary = "No significant threats detected. Standard monitoring in place."
-            explanation = "Normal system activity with routine scans. All systems operating normally."
-            recommendations = [
-                "Continue standard monitoring",
-                "Perform scheduled security audits",
-                "Update threat intelligence feeds"
-            ]
-        elif simulated_threat_level == "LOW":
-            summary = "Low-level scanning activity detected. Automated defenses contain threats."
-            explanation = "Automated tools have detected and blocked several low-level scan attempts."
-            recommendations = [
-                "Monitor for increased activity",
-                "Review access logs for anomalies",
-                "Verify security patches are up to date"
-            ]
-        elif simulated_threat_level == "MEDIUM":
-            summary = "Moderate threat activity detected. Active monitoring required."
-            explanation = "Multiple access attempts from various sources. Some require investigation."
-            recommendations = [
-                "Investigate flagged IP addresses",
-                "Review authentication logs",
-                "Consider temporary restrictions on suspicious networks"
-            ]
-        else:  # CRITICAL
-            summary = "High-level threats detected. Immediate action required."
-            explanation = "Coordinated attack attempts detected. Defense systems are engaged."
-            recommendations = [
-                "Activate incident response team",
-                "Implement enhanced monitoring",
-                "Consider network segmentation if threat persists"
-            ]
-        
-        report_data = {
-            "timestamp": current_time.isoformat() + "Z",
-            "threat_level": simulated_threat_level,
-            "total_incidents": len(simulated_alerts),
-            "quarantined_ips": [alert["ip"] for alert in simulated_alerts],
-            "summary": summary,
-            "layman_explanation": explanation,
-            "recommendations": recommendations,
-            "incidents": simulated_alerts
-        }
+    timestamp = datetime.utcnow().isoformat() + "Z"
+    
+    event = {
+        "timestamp": timestamp,
+        "ip": ip_address,
+        "trigger": event_type,
+        "description": event_descriptions.get(event_type, "Unknown threat detected"),
+        "severity": random.choice(["LOW", "MEDIUM", "HIGH"])
+    }
+    
+    # Add to threat history
+    st.session_state.threat_history.insert(0, event)
+    
+    # Update metrics
+    st.session_state.total_alerts += 1
+    if ip_address not in st.session_state.quarantined_ips:
+        st.session_state.quarantined_ips.append(ip_address)
+    
+    # Update threat level based on severity
+    if event["severity"] == "HIGH":
+        if st.session_state.current_threat_level != "CRITICAL":
+            st.session_state.current_threat_level = "CRITICAL"
+    elif event["severity"] == "MEDIUM" and st.session_state.current_threat_level == "SAFE":
+        st.session_state.current_threat_level = "MEDIUM"
+    
+    return event
 
-if report_data:
-    threat_level = report_data.get("threat_level", "UNKNOWN")
-else:
-    threat_level = "UNKNOWN"
+def reset_system():
+    """Reset all system metrics to initial state"""
+    st.session_state.threat_history = []
+    st.session_state.current_threat_level = "SAFE"
+    st.session_state.total_alerts = 0
+    st.session_state.quarantined_ips = []
+    st.session_state.last_simulation_time = datetime.utcnow()
 
-# Tier 1: Global Health (The Header) - Large status indicator
-st.markdown("<h1 style='text-align: center;'>ImmuniSOC-Nexus DASHBOARD</h1>", unsafe_allow_html=True)
+# Sidebar with interactive controls
+with st.sidebar:
+    st.header("🎯 Cybersecurity Simulator")
+    st.write("Click buttons to simulate different cyber attacks")
+    
+    # Different attack simulations
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🚨 Honeytoken Attack", use_container_width=True):
+            simulate_threat_event("honeytoken_access")
+            st.success("Honeytoken access simulated!")
+        
+        if st.button("🔓 Brute Force", use_container_width=True):
+            simulate_threat_event("brute_force")
+            st.success("Brute force attack simulated!")
+    
+    with col2:
+        if st.button("💉 SQL Injection", use_container_width=True):
+            simulate_threat_event("sql_injection")
+            st.success("SQL injection detected!")
+        
+        if st.button("📁 Dir Traversal", use_container_width=True):
+            simulate_threat_event("directory_traversal")
+            st.success("Directory traversal blocked!")
+    
+    # More complex attacks
+    if st.button("⚡ DDoS Attack", use_container_width=True):
+        # Simulate multiple IPs in a DDoS attack
+        for _ in range(random.randint(3, 8)):
+            simulate_threat_event("ddos")
+        st.success("DDoS attack simulated!")
+    
+    if st.button("🦠 Malware Scan", use_container_width=True):
+        simulate_threat_event("malware_scan")
+        st.success("Malware payload blocked!")
+    
+    # Reset button
+    if st.button("🔄 Reset System", type="secondary", use_container_width=True):
+        reset_system()
+        st.success("System reset to safe state!")
+    
+    # Auto-refresh toggle
+    auto_refresh = st.checkbox("Enable Auto-Refresh", value=True, key="auto_refresh_sidebar")
+    if auto_refresh:
+        refresh_interval = st.slider("Refresh Interval (seconds)", min_value=1, max_value=30, value=5, key="refresh_slider_sidebar")
+        st_autorefresh(interval=refresh_interval * 1000, key="sidebar_refresh")
+
+# Main dashboard header
+st.markdown("<h1 style='text-align: center; color: #1E88E5;'>ImmuniSOC-Nexus Dashboard</h1>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center; color: #666;'>Advanced Deception Mesh & Threat Detection System</h3>", unsafe_allow_html=True)
 
 # System status indicator with color coding
-if threat_level == "CRITICAL":
+if st.session_state.current_threat_level == "CRITICAL":
     status_text = "CRITICAL THREAT DETECTED"
     status_color = "#D32F2F"  # Dark red
-    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🔴 {status_text}</div>"
-elif threat_level == "MEDIUM":
+    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🚨 {status_text}</div>"
+elif st.session_state.current_threat_level == "MEDIUM":
     status_text = "MEDIUM THREAT DETECTED"
     status_color = "#FF8F00"  # Amber
-    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🟡 {status_text}</div>"
-elif threat_level == "LOW":
+    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>⚠️ {status_text}</div>"
+elif st.session_state.current_threat_level == "LOW":
     status_text = "MINOR THREAT DETECTED"
     status_color = "#FFB300"  # Light amber
     status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🟡 {status_text}</div>"
-elif threat_level == "SAFE":
+elif st.session_state.current_threat_level == "SAFE":
     status_text = "SYSTEM SECURE"
     status_color = "#388E3C"  # Dark green
-    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🟢 {status_text}</div>"
+    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>✅ {status_text}</div>"
 else:
     status_text = "MONITORING"
     status_color = "#757575"  # Gray
-    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🔵 {status_text}</div>"
+    status_style = f"<div style='background-color: {status_color}; padding: 25px; border-radius: 10px; text-align: center; font-size: 32px; font-weight: bold; color: white; margin-bottom: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);'>🔍 {status_text}</div>"
 
 st.markdown(status_style, unsafe_allow_html=True)
 
 # Key metrics in cards
-alerts = status_data.get("alerts", []) if status_data else []
-total_alerts = status_data.get("total_alerts", 0) if status_data else 0
-unique_ips = len({alert.get("ip") for alert in alerts}) if alerts else 0
-
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown(f"""
     <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         <h3 style="color: #1E88E5; margin-bottom: 10px;">🛡️ Attacks Blocked</h3>
-        <h2 style="color: #0D47A1; font-size: 36px; margin: 0;">{total_alerts}</h2>
+        <h2 style="color: #0D47A1; font-size: 36px; margin: 0;">{st.session_state.total_alerts}</h2>
     </div>
     """, unsafe_allow_html=True)
 
@@ -179,7 +194,7 @@ with col2:
     st.markdown(f"""
     <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         <h3 style="color: #1E88E5; margin-bottom: 10px;">🔒 IPs Quarantined</h3>
-        <h2 style="color: #0D47A1; font-size: 36px; margin: 0;">{unique_ips}</h2>
+        <h2 style="color: #0D47A1; font-size: 36px; margin: 0;">{len(st.session_state.quarantined_ips)}</h2>
     </div>
     """, unsafe_allow_html=True)
 
@@ -187,7 +202,7 @@ with col3:
     st.markdown(f"""
     <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         <h3 style="color: #1E88E5; margin-bottom: 10px;">📊 Threat Level</h3>
-        <h2 style="color: #0D47A1; font-size: 36px; margin: 0;">{threat_level}</h2>
+        <h2 style="color: #0D47A1; font-size: 36px; margin: 0;">{st.session_state.current_threat_level}</h2>
     </div>
     """, unsafe_allow_html=True)
 
@@ -278,42 +293,78 @@ if auto_refresh:
     refresh_interval = st.slider("Refresh Interval (seconds)", min_value=1, max_value=30, value=5, key="refresh_slider")
     st_autorefresh(interval=refresh_interval * 1000, key="live_feed_refresh")
 
-# Create a dataframe for the threat feed
-if alerts:
-    # Sort by timestamp descending
-    sorted_alerts = sorted(alerts, key=lambda x: x.get("timestamp", ""), reverse=True)
-    
-    # Add to threat history
-    for alert in sorted_alerts:
-        if alert not in st.session_state.threat_history:
-            st.session_state.threat_history.insert(0, alert)
-    
+# Interactive explanation section
+st.markdown("### 🧠 How ImmuniSOC-Nexus Works")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("""
+    **Deception Technology:**
+    - Strategic placement of fake endpoints (honeytokens)
+    - Attracts attackers away from real assets
+    - Immediately identifies unauthorized access attempts
+    """)
+
+with col2:
+    st.markdown("""
+    **Real-Time Response:**
+    - Instant IP quarantine upon detection
+    - No manual intervention required
+    - Prevents further attacks from same source
+    """)
+
+# Live threat feed
+st.markdown("### 🚨 Live Threat Feed")
+if st.session_state.threat_history:
     # Create a DataFrame-like structure
     threat_data = {
-        "Timestamp": [alert.get("timestamp", "") for alert in st.session_state.threat_history],
-        "IP Address": [alert.get("ip", "") for alert in st.session_state.threat_history],
-        "Trigger": [alert.get("trigger", "") for alert in st.session_state.threat_history]
+        "Time": [event["timestamp"] for event in st.session_state.threat_history],
+        "IP Address": [event["ip"] for event in st.session_state.threat_history],
+        "Threat Type": [event["trigger"] for event in st.session_state.threat_history],
+        "Description": [event["description"] for event in st.session_state.threat_history],
+        "Severity": [event["severity"] for event in st.session_state.threat_history]
     }
     
     # Display the dataframe
     st.dataframe(threat_data, use_container_width=True, height=300)
 else:
-    st.info("Simulating security events... Generating realistic threat data for demonstration.")
+    st.info("No threats detected yet. Use the buttons in the sidebar to simulate cyber attacks!")
 
-# Threat summary section
-if report_data:
-    st.markdown("### Threat Analysis")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown(f"**Summary:** {report_data.get('summary', 'No summary available.')}")
-        st.markdown(f"**Explanation:** {report_data.get('layman_explanation', 'No explanation available.')}")
-    
-    with col2:
-        st.markdown("**Recommendations:**")
-        for rec in report_data.get('recommendations', []):
-            st.markdown(f"- {rec}")
+# Threat analysis section
+st.markdown("### 📊 Threat Analysis")
+
+if st.session_state.current_threat_level == "SAFE":
+    st.success("✅ No threats detected. System is secure and monitoring.")
+    st.write("The system is actively watching for unauthorized access attempts.")
+elif st.session_state.current_threat_level == "LOW":
+    st.warning("🟡 Low-level threats detected. System defenses are handling automatically.")
+    st.write("Monitoring for any escalation in attack patterns.")
+elif st.session_state.current_threat_level == "MEDIUM":
+    st.warning("⚠️ Medium threats detected. Enhanced monitoring active.")
+    st.write("Multiple access attempts from various sources. Some require investigation.")
+else:  # CRITICAL
+    st.error("🚨 CRITICAL THREAT LEVEL: Coordinated attacks detected!")
+    st.write("Defense systems are engaged. Recommend immediate review of security protocols.")
 
 # Footer
 st.markdown("---")
-st.markdown(f"<div style='text-align: center; color: #666; padding: 10px;'>ImmuniSOC-Nexus • Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} • API: {API_URL}</div>", unsafe_allow_html=True)
+st.markdown(f"<div style='text-align: center; color: #666; padding: 10px;'>ImmuniSOC-Nexus • Interactive Cybersecurity Demo • Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>", unsafe_allow_html=True)
+
+# Instructions for users
+with st.expander("📋 Instructions", expanded=False):
+    st.markdown("""
+    **How to Use This Dashboard:**
+    
+    1. **Click attack simulation buttons** in the sidebar to trigger different cyber threats
+    2. **Watch the metrics** update in real-time as attacks are detected
+    3. **Observe the threat feed** showing detailed attack information
+    4. **See the threat level** change based on attack severity
+    5. **Use the reset button** to clear all data and start fresh
+    
+    **What You're Seeing:**
+    - ImmuniSOC-Nexus uses deception technology to detect unauthorized access
+    - When someone tries to access fake endpoints (honeytokens), they're immediately identified as attackers
+    - The system automatically quarantines malicious IPs to prevent further attacks
+    - All events are logged for security analysis and compliance
+    """)
